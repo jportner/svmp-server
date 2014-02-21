@@ -8,3 +8,4 @@ config/config-local.js
 out/
 *.txt
 .srl
+*.log
