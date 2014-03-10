@@ -18,9 +18,11 @@
 # Adapted from guide: http://blog.callistaenterprise.se/2011/11/24/creating-self-signed-certificates-for-use-on-android/
 
 # Change these variables
+CA_ALIAS="ca-alias-name"
 CA_PKEY_PASS="changeme_cakeypass"
 SERVER_PKEY_PASS="changeme_serverkeypass"
 CLIENT_PKEY_PASS="changeme_clientkeypass" # Only used when 'use_tls_user_auth' is enabled
+CLIENT_TSTORE_PASS="changeme_clienttstorepass"
 
 # If you set these higher than 1024, you will need the JCE unlimited strength files installed
 CA_PKEY_BITS=2048
@@ -33,6 +35,7 @@ OUT_PATH="$DIR/../out"
 CA_CERT_CONFIG="$DIR/../tls/ca.cnf"
 CLIENT_CERT_CONFIG="$DIR/../tls/client.cnf"
 SERVER_CERT_CONFIG="$DIR/../tls/server.cnf"
+BCJAR="$DIR/bcprov-jdk15on-150.jar"
 CA_PKEY="$OUT_PATH/ca_pkey.pem"
 C_PKEY="$OUT_PATH/client_pkey.pem"
 S_PKEY="$OUT_PATH/server_pkey.pem"
@@ -42,7 +45,19 @@ C_CERT="$OUT_PATH/client_cert.pem"
 S_CSR="$OUT_PATH/server_cert.csr"
 S_CERT="$OUT_PATH/server_cert.pem"
 C_KANDC="$OUT_PATH/client_pkey_and_cert.p12"
+C_TSTORE="$OUT_PATH/client_truststore.bks"
 
+# Verify the user has keytool
+KEYTOOL=`which keytool`
+if [[ -z $JAVA || -z $KEYTOOL ]] ; then
+  echo "Can't find keytool on the path. Trying JAVA_HOME."
+  if [ -z $JAVA_HOME ] ; then
+    echo "JAVA_HOME not set. Aborting."
+    exit 1
+  else
+    KEYTOOL=$JAVA_HOME/bin/keytool
+  fi
+fi
 
 echo "Generating mutual SSL certificates..."
 echo ""
@@ -90,7 +105,13 @@ openssl pkcs12 -export -inkey "$C_PKEY" -passin "pass:$CLIENT_PKEY_PASS" -in "$C
 echo ""
 
 ####################################################################
-echo "6. CLEANUP"
+echo "6. ADD CA CERTIFICATE TO CLIENT TRUST STORE"
+rm -f "$C_TSTORE"
+$KEYTOOL -import -v -trustcacerts -alias "$CA_ALIAS" -file "$CA_CERT" -keystore "$C_TSTORE" -storetype BKS -providerclass org.bouncycastle.jce.provider.BouncyCastleProvider -providerpath "$BCJAR" -storepass "$CLIENT_TSTORE_PASS" -noprompt
+echo ""
+
+####################################################################
+echo "7. CLEANUP"
 rm -f "$C_PKEY"
 rm -f "$C_CSR"
 rm -f "$S_CSR"
@@ -101,4 +122,5 @@ echo "Done!"
 echo ""
 # We should now have all files we need for a successful TLS/SSL mutual authentication.
 # The files we use in our test proxy will be: server_pkey.pem, server_cert.pem, and ca_cert.pem.
+# The file we compile in our Android application for server certificate trust (optional): client_truststore.bks
 # The file we install on our Android device for certificate auth (optional, ICS+ only): client_pkey_and_cert.p12
